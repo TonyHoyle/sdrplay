@@ -19,8 +19,7 @@ public:
 	SDRPacketQueue(int samplesPerPacket, int packetCount, bool i, bool q);
 	virtual ~SDRPacketQueue();
 	
-	short *getI(bool write);
-	short *getQ(bool write);
+	bool getPacket(bool forWrite, short **I, short **Q);
 	bool hasData();
 };
 
@@ -41,20 +40,20 @@ public:
   virtual ~SDRPlay();
   
   mir_sdr_ErrT init(int gainReduction, double adcFreq, double rfFreq, mir_sdr_Bw_MHzT bwType, mir_sdr_If_kHzT ifType);
-  mir_sdr_errT uninit();
-  mir_sdr_errT setRF(double freq, bool absolute, bool syncUpdate);
-  mir_sdr_errT readPacket(SDRPacketQueue *packet, bool& grChanged, rfChanged, fsChanged);
-  mir_sdr_errT setFS(double freq, bool absolute, bool syncUpdate);
-  mir_sdr_errT setGR(int gainReduction, bool absolute, bool syncUpdate);
-  mir_sdr_errT setGRParams(int minimumGr, int lnaGrThreshold);
-  mir_sdr_errT setDCMode(DCMode_t mode, bool speedUp);
-  mir_sdr_errT setDCTrackTime(int trackTime);
-  mir_sdr_errT setSyncUpdateSampleNum(unsigned sampleNum);
-  mir_sdr_errT setSyncUpdatePeriod(unsigned period);
+  mir_sdr_ErrT uninit();
+  mir_sdr_ErrT setRF(double freq, bool absolute, bool syncUpdate);
+  mir_sdr_ErrT readPacket(SDRPacketQueue *packet, bool& grChanged, bool& rfChanged, bool& fsChanged);
+  mir_sdr_ErrT setFS(double freq, bool absolute, bool syncUpdate);
+  mir_sdr_ErrT setGR(int gainReduction, bool absolute, bool syncUpdate);
+  mir_sdr_ErrT setGRParams(int minimumGr, int lnaGrThreshold);
+  mir_sdr_ErrT setDCMode(DCMode_t mode, bool speedUp);
+  mir_sdr_ErrT setDCTrackTime(int trackTime);
+  mir_sdr_ErrT setSyncUpdateSampleNum(unsigned sampleNum);
+  mir_sdr_ErrT setSyncUpdatePeriod(unsigned period);
   float apiVersion();
-  mir_Sdr_errT resetUpdateFlags(bool resetGainUpdate, bool resetRfUpdate, bool resetFsUpdate);
+  mir_sdr_ErrT resetUpdateFlags(bool resetGainUpdate, bool resetRfUpdate, bool resetFsUpdate);
   
-  SDRPacket *newPacket(int count);
+  SDRPacketQueue *newPacketQueue(int packetCount);
 };
 
 #endif
