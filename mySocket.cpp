@@ -442,7 +442,7 @@ const char *mySocket::interfaceAddress(int af)
 
 const char *mySocket::endpointAddress()
 {
-    if(mEndpointLen <- 0)
+    if(mEndpointLen <= 0)
         throw new error("No endpoint");
 
     if(getnameinfo((sockaddr*)&mEndpoint, mEndpointLen, mEndpointName, sizeof(mEndpointName), NULL, 0, NI_IDN))
