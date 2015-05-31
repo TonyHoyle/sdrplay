@@ -143,3 +143,8 @@ bool SDRPacketQueue::hasData()
 {
 	return mReadPoint!=mWritePoint;
 }
+
+int SDRPacketQueue::getPacketSize()
+{
+	return mSamplesPerPacket;
+}

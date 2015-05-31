@@ -2,10 +2,13 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 #include "mySocket.h"
 #include "error.h"
 #include "sdrplay.h"
+
+static const int QUEUE_SIZE = 25;
 
 struct sdr_info
 {
@@ -35,6 +38,15 @@ private:
 
     void processSdrCommand(sdr_command *sdrcmd);
     double intToDouble(int freq);
+
+    struct sdrData
+    {
+        sdrServer *server;
+        mySocket *socket;
+    };
+    static void *_sdrserver_send(void *data);
+    void sdrserver_send(mySocket *socket);
+
 public:
     sdrServer(int frequency, int port, int samplerate, bool ipv4, bool ipv6, bool debug);
     virtual ~sdrServer();
@@ -43,6 +55,7 @@ public:
 
     virtual bool clientConnected(mySocket *socket);
     virtual void packetReceived(mySocket *socket, const void *packet, ssize_t packetLen, sockaddr *, socklen_t);
+    virtual bool needPacket(mySocket *socket);
 };
 
 void usage()
@@ -138,11 +151,41 @@ int sdrServer::run()
 
 bool sdrServer::clientConnected(mySocket *socket)
 {
+    pthread_t thread;
     sdr_info info = { {'R', 'T', 'L', '\0' }, 0, 64 };
 
     if(mDebug)
         printf("Connection made from %s\n", socket->endpointAddress());
-    return socket->send(&info, sizeof(info)) > 0;
+    if(socket->send(&info, sizeof(info)) <= 0)
+        return false;
+
+    sdrData *data = new sdrData;
+    data->server = this;
+    data->socket = socket;
+    pthread_create(&thread, NULL, _sdrserver_send, &data);
+    return true;
+}
+
+void *sdrServer::_sdrserver_send(void *data)
+{
+    sdrServer *This = ((sdrData *)data)->server;
+    mySocket *socket = ((sdrData *)data)->socket;
+
+    delete (sdrData *)data;
+    This->sdrserver_send(socket);
+    return NULL;
+}
+
+void sdrServer::sdrserver_send(mySocket *socket)
+{
+    SDRPacketQueue *queue = mSdrPlay.newPacketQueue(QUEUE_SIZE);
+
+    if(mDebug)
+        printf("Packet collection thread started\n");
+    socket->setUserData(queue);
+    while(mSdrPlay.readPacket(queue, NULL, NULL, NULL) == 0)
+        ;
+    delete queue;
 }
 
 void sdrServer::packetReceived(mySocket *socket, const void *packet, ssize_t packetLen, sockaddr *, socklen_t)
@@ -179,6 +222,19 @@ void sdrServer::packetReceived(mySocket *socket, const void *packet, ssize_t pac
         memcpy(mPartialCommand, s, (size_t)packetLen);
         mPartialCommandPtr = mPartialCommand + packetLen;
     }
+}
+
+bool sdrServer::needPacket(mySocket *socket)
+{
+    SDRPacketQueue *queue = (SDRPacketQueue *)socket->getUserData();
+    short *I, *Q;
+
+    if(queue->hasData()) {
+        queue->getPacket(false, &I, &Q);
+        socket->send(Q, (size_t) queue->getPacketSize());
+    }
+
+    return true;
 }
 
 void sdrServer::processSdrCommand(sdr_command *sdrcmd)

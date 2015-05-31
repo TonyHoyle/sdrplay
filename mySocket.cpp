@@ -182,12 +182,18 @@ void mySocket::run_tcp()
 
     mExit = false;
     while(!mExit) {
-        fd_set socks;
-        FD_ZERO(&socks);
-        FD_SET(mConnectedSocket, &socks);
-        if (select(mConnectedSocket+1, &socks, NULL, NULL, 0) >= 0) {
-            if (FD_ISSET(mConnectedSocket, &socks)) {
+        fd_set readfds,writefds;
+        FD_ZERO(&readfds);
+        FD_ZERO(&writefds);
+        FD_SET(mConnectedSocket, &readfds);
+        FD_SET(mConnectedSocket, &writefds);
+        if (select(mConnectedSocket+1, &readfds, &writefds, NULL, 0) >= 0) {
+            if (FD_ISSET(mConnectedSocket, &readfds)) {
                 if(!read(mConnectedSocket))
+                    return;
+            }
+            if (FD_ISSET(mConnectedSocket, &writefds)) {
+                if(!mHandler->needPacket(this))
                     return;
             }
         }
@@ -208,12 +214,12 @@ void mySocket::listen()
 
     mExit = false;
     while(!mExit) {
-        fd_set socks;
-        FD_ZERO(&socks);
-        if(mSocket4 > 0) FD_SET(mSocket4, &socks);
-        if(mSocket6 > 0) FD_SET(mSocket6, &socks);
-        if (select(max(mSocket4, mSocket6)+1, &socks, NULL, NULL, 0) >= 0) {
-            if (mSocket4 > 0 && FD_ISSET(mSocket4, &socks)) {
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        if(mSocket4 > 0) FD_SET(mSocket4, &readfds);
+        if(mSocket6 > 0) FD_SET(mSocket6, &readfds);
+        if (select(max(mSocket4, mSocket6)+1, &readfds, NULL, NULL, 0) >= 0) {
+            if (mSocket4 > 0 && FD_ISSET(mSocket4, &readfds)) {
                 if(mTcp) {
                     mEndpointLen = sizeof(mEndpoint);
                     mySocket *s = new mySocket();
@@ -223,7 +229,7 @@ void mySocket::listen()
                 else
                     read(mSocket4);
             }
-            if (mSocket6 > 0 && FD_ISSET(mSocket6, &socks)) {
+            if (mSocket6 > 0 && FD_ISSET(mSocket6, &readfds)) {
                 if(mTcp) {
                     mEndpointLen = sizeof(mEndpoint);
                     mySocket *s = new mySocket();
@@ -482,3 +488,12 @@ const char *mySocket::endpointAddress()
     return mEndpointName;
 }
 
+void mySocket::setUserData(void *data)
+{
+    mUserData = data;
+}
+
+void *mySocket::getUserData()
+{
+    return mUserData;
+}

@@ -12,6 +12,7 @@ class socketEvent
 public:
     virtual bool clientConnected(mySocket *socket) = 0;
     virtual void packetReceived(mySocket *socket, const void *packet, ssize_t packetLen, sockaddr *sender, socklen_t senderLen) = 0;
+    virtual bool needPacket(mySocket *socket) = 0;
 };
 
 class mySocket
@@ -29,6 +30,7 @@ private:
     sockaddr_in6 mMulticastV6;
     socklen_t mEndpointLen;
     char mEndpointName[NI_MAXHOST];
+    void *mUserData;
 
     bool read(int socket);
     static void *_run_tcp(void *ptr);
@@ -51,6 +53,9 @@ public:
     ssize_t send(const void *packet, size_t packetLen);
     ssize_t sendTo(const void *packet, size_t packetLen, const sockaddr *to, socklen_t toLen);
     ssize_t replyTo(const void *packet, size_t packetLen, const sockaddr *to, socklen_t toLen);
+
+    void setUserData(void *data);
+    void *getUserData();
 };
 
 #endif

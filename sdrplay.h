@@ -21,6 +21,8 @@ public:
 	
 	bool getPacket(bool forWrite, short **I, short **Q);
 	bool hasData();
+
+    int getPacketSize();
 };
 
 enum DCMode_t
