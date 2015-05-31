@@ -42,8 +42,8 @@ public:
   mir_sdr_ErrT init(int gainReduction, double adcFreq, double rfFreq, mir_sdr_Bw_MHzT bwType, mir_sdr_If_kHzT ifType);
   mir_sdr_ErrT uninit();
   mir_sdr_ErrT setRF(double freq, bool absolute, bool syncUpdate);
-  mir_sdr_ErrT readPacket(SDRPacketQueue *packet, bool& grChanged, bool& rfChanged, bool& fsChanged);
-  mir_sdr_ErrT setFS(double freq, bool absolute, bool syncUpdate);
+  mir_sdr_ErrT readPacket(SDRPacketQueue *packet, bool* grChanged, bool* rfChanged, bool* fsChanged);
+  mir_sdr_ErrT setFS(double freq, bool absolute, bool syncUpdate, bool reCal);
   mir_sdr_ErrT setGR(int gainReduction, bool absolute, bool syncUpdate);
   mir_sdr_ErrT setGRParams(int minimumGr, int lnaGrThreshold);
   mir_sdr_ErrT setDCMode(DCMode_t mode, bool speedUp);

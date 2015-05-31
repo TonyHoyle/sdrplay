@@ -28,44 +28,66 @@ mir_sdr_ErrT SDRPlay::setRF(double freq, bool absolute, bool syncUpdate)
 	return mir_sdr_SetRf(freq, absolute?1:0, syncUpdate?1:0);
 }
 
-mir_sdr_ErrT SDRPlay::readPacket(SDRPacketQueue *packet, bool& grChanged, bool& rfChanged, bool& fsChanged)
+mir_sdr_ErrT SDRPlay::readPacket(SDRPacketQueue *packet, bool* grChanged, bool* rfChanged, bool* fsChanged)
 {
+	short *I, *Q;
+	int _grChanged, _rfChanged, _fsChanged;
+	unsigned firstSampleNum;
+    mir_sdr_ErrT res;
+
+	packet->getPacket(true, &I, &Q);
+	res = mir_sdr_ReadPacket(I, Q, &firstSampleNum, &_grChanged, &_rfChanged, &_fsChanged);
+    if(grChanged) *grChanged = _grChanged!=0;
+    if(rfChanged) *rfChanged = _rfChanged!=0;
+    if(fsChanged) *fsChanged = _fsChanged!=0;
+    return res;
 }
  
-mir_sdr_ErrT setFS(double freq, bool absolute, bool syncUpdate)
+mir_sdr_ErrT SDRPlay::setFS(double freq, bool absolute, bool syncUpdate, bool reCal)
 {
+	return mir_sdr_SetFs(freq, absolute?1:0, syncUpdate?1:0, reCal?1:0);
 }
   
-mir_sdr_ErrT setGR(int gainReduction, bool absolute, bool syncUpdate)
+mir_sdr_ErrT SDRPlay::setGR(int gainReduction, bool absolute, bool syncUpdate)
 {
+	return mir_sdr_SetGr(gainReduction, absolute?1:0, syncUpdate?1:0);
 }
 
-mir_sdr_ErrT setGRParams(int minimumGr, int lnaGrThreshold)
+mir_sdr_ErrT SDRPlay::setGRParams(int minimumGr, int lnaGrThreshold)
 {
+	return mir_sdr_SetGrParams(minimumGr, lnaGrThreshold);
 }
 
-mir_sdr_ErrT setDCMode(DCMode_t mode, bool speedUp)
+mir_sdr_ErrT SDRPlay::setDCMode(DCMode_t mode, bool speedUp)
 {
+	return mir_sdr_SetDcMode((int)mode, speedUp?1:0);
 }
 
-mir_sdr_ErrT setDCTrackTime(int trackTime)
+mir_sdr_ErrT SDRPlay::setDCTrackTime(int trackTime)
 {
+	return mir_sdr_SetDcTrackTime(trackTime);
 }
 
-mir_sdr_ErrT setSyncUpdateSampleNum(unsigned sampleNum)
+mir_sdr_ErrT SDRPlay::setSyncUpdateSampleNum(unsigned sampleNum)
 {
+	return mir_sdr_SetSyncUpdateSampleNum(sampleNum);
 }
 
-mir_sdr_ErrT setSyncUpdatePeriod(unsigned period)
+mir_sdr_ErrT SDRPlay::setSyncUpdatePeriod(unsigned period)
 {
+	return mir_sdr_SetSyncUpdatePeriod(period);
 }
 
-float apiVersion()
+float SDRPlay::apiVersion()
 {
+	float v;
+	mir_sdr_ApiVersion(&v);
+	return v;
 }
 
-mir_sdr_ErrT resetUpdateFlags(bool resetGainUpdate, bool resetRfUpdate, bool resetFsUpdate)
+mir_sdr_ErrT SDRPlay::resetUpdateFlags(bool resetGainUpdate, bool resetRfUpdate, bool resetFsUpdate)
 {
+	return mir_sdr_ResetUpdateFlags(resetGainUpdate?1:0, resetRfUpdate?1:0, resetFsUpdate?1:0);
 }
   
 SDRPacketQueue *SDRPlay::newPacketQueue(int packetCount)
@@ -104,7 +126,7 @@ bool SDRPacketQueue::getPacket(bool forWrite, short **I, short **Q)
 		else (*I) = mI+mSamplesPerPacket+mWritePoint;
 		if(!mQ) (*Q) = (short*)null;
 		else (*Q) = mQ+mSamplesPerPacket+mWritePoint;
-		if(++mWritePoint = mPacketCount) mWritePoint = 0;
+		if((++mWritePoint) == mPacketCount) mWritePoint = 0;
 	} else {
 		if(!hasData()) return false;
 		
@@ -112,7 +134,7 @@ bool SDRPacketQueue::getPacket(bool forWrite, short **I, short **Q)
 		else (*I) = mI+mSamplesPerPacket+mReadPoint;
 		if(!mQ) (*Q) = (short*)null;
 		else (*Q) = mQ+mSamplesPerPacket+mReadPoint;
-		if(++mReadPoint = mPacketCount) mReadPoint = 0;
+		if((++mReadPoint) == mPacketCount) mReadPoint = 0;
 	}
 	return true;
 }
