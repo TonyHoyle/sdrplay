@@ -11,6 +11,7 @@ class socketEvent
 {
 public:
     virtual bool clientConnected(mySocket *socket) = 0;
+    virtual void clientDisconnected(mySocket *socket) = 0;
     virtual void packetReceived(mySocket *socket, const void *packet, ssize_t packetLen, sockaddr *sender, socklen_t senderLen) = 0;
     virtual bool needPacket(mySocket *socket) = 0;
 };

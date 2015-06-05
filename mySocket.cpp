@@ -167,6 +167,9 @@ void *mySocket::_run_tcp(void *ptr)
 {
     mySocket *s = (mySocket *) ptr;
     s->run_tcp();
+
+    s->mHandler->clientDisconnected(s);
+
     delete s;
     return NULL;
 }

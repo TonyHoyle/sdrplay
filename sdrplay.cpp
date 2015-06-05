@@ -127,6 +127,10 @@ bool SDRPacketQueue::getPacket(bool forWrite, short **I, short **Q)
 		if(!mQ) (*Q) = (short*)null;
 		else (*Q) = mQ+mSamplesPerPacket+mWritePoint;
 		if((++mWritePoint) == mPacketCount) mWritePoint = 0;
+		// Discard unread data
+		if(mWritePoint == mReadPoint) {
+			if ((++mReadPoint) == mPacketCount) mReadPoint = 0;
+		}
 	} else {
 		if(!hasData()) return false;
 		

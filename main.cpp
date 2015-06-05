@@ -27,6 +27,7 @@ class sdrServer : socketEvent
 {
 private:
     bool mDebug;
+    pthread_t mThread;
     bool mIpv4, mIpv6;
     int mPort;
     int mFrequency, mSampleRate;
@@ -54,6 +55,7 @@ public:
     int run();
 
     virtual bool clientConnected(mySocket *socket);
+    virtual void clientDisconnected(mySocket *socket);
     virtual void packetReceived(mySocket *socket, const void *packet, ssize_t packetLen, sockaddr *, socklen_t);
     virtual bool needPacket(mySocket *socket);
 };
@@ -151,7 +153,6 @@ int sdrServer::run()
 
 bool sdrServer::clientConnected(mySocket *socket)
 {
-    pthread_t thread;
     sdr_info info = { {'R', 'T', 'L', '\0' }, 0, 64 };
 
     if(mDebug)
@@ -162,8 +163,13 @@ bool sdrServer::clientConnected(mySocket *socket)
     sdrData *data = new sdrData;
     data->server = this;
     data->socket = socket;
-    pthread_create(&thread, NULL, _sdrserver_send, &data);
+    pthread_create(&mThread, NULL, _sdrserver_send, &data);
     return true;
+}
+
+void sdrServer::clientDisconnected(mySocket *socket)
+{
+    pthread_cancel(mThread);
 }
 
 void *sdrServer::_sdrserver_send(void *data)
