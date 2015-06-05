@@ -1,7 +1,6 @@
 // SDRPlay controller object
+#include <stdio.h>
 #include "sdrplay.h"
-
-#define null ((void*)0)  
 
 SDRPlay::SDRPlay()
 {
@@ -28,14 +27,14 @@ mir_sdr_ErrT SDRPlay::setRF(double freq, bool absolute, bool syncUpdate)
 	return mir_sdr_SetRf(freq, absolute?1:0, syncUpdate?1:0);
 }
 
-mir_sdr_ErrT SDRPlay::readPacket(SDRPacketQueue *packet, bool* grChanged, bool* rfChanged, bool* fsChanged)
+mir_sdr_ErrT SDRPlay::readPacket(short *I, short *Q, bool* grChanged, bool* rfChanged, bool* fsChanged)
 {
-	short *I, *Q;
 	int _grChanged, _rfChanged, _fsChanged;
 	unsigned firstSampleNum;
     mir_sdr_ErrT res;
 
-	packet->getPacket(true, &I, &Q);
+    // FIXME: WTF is firstSampleNum?
+
 	res = mir_sdr_ReadPacket(I, Q, &firstSampleNum, &_grChanged, &_rfChanged, &_fsChanged);
     if(grChanged) *grChanged = _grChanged!=0;
     if(rfChanged) *rfChanged = _rfChanged!=0;
@@ -89,66 +88,8 @@ mir_sdr_ErrT SDRPlay::resetUpdateFlags(bool resetGainUpdate, bool resetRfUpdate,
 {
 	return mir_sdr_ResetUpdateFlags(resetGainUpdate?1:0, resetRfUpdate?1:0, resetFsUpdate?1:0);
 }
-  
-SDRPacketQueue *SDRPlay::newPacketQueue(int packetCount)
-{
-	return new SDRPacketQueue(mSamplesPerPacket, packetCount, false, true);
-}
 
-// SDRPacketQueue
-
-SDRPacketQueue::SDRPacketQueue(int samplesPerPacket, int packetCount, bool i, bool q)
+int SDRPlay::getSamplesPerPacket()
 {
-	int size = samplesPerPacket * packetCount;
-	
-	if(i) mI = new short[size];
-	else mI = (short*)null;
-	
-	if(q) mQ = new short[size];
-	else mQ = (short*)null;
-	
-	mSamplesPerPacket = samplesPerPacket;
-	mPacketCount = packetCount;
-	mReadPoint = 0;
-	mWritePoint = 0;
-}
-
-SDRPacketQueue::~SDRPacketQueue()
-{
-	if(mI) delete[](mI);
-	if(mQ) delete[](mQ);
-}
-	
-bool SDRPacketQueue::getPacket(bool forWrite, short **I, short **Q)
-{
-	if(forWrite) {
-		if(!mI) (*I) = (short*)null;
-		else (*I) = mI+mSamplesPerPacket+mWritePoint;
-		if(!mQ) (*Q) = (short*)null;
-		else (*Q) = mQ+mSamplesPerPacket+mWritePoint;
-		if((++mWritePoint) == mPacketCount) mWritePoint = 0;
-		// Discard unread data
-		if(mWritePoint == mReadPoint) {
-			if ((++mReadPoint) == mPacketCount) mReadPoint = 0;
-		}
-	} else {
-		if(!hasData()) return false;
-		
-		if(!mI) (*I) = (short*)null;
-		else (*I) = mI+mSamplesPerPacket+mReadPoint;
-		if(!mQ) (*Q) = (short*)null;
-		else (*Q) = mQ+mSamplesPerPacket+mReadPoint;
-		if((++mReadPoint) == mPacketCount) mReadPoint = 0;
-	}
-	return true;
-}
-
-bool SDRPacketQueue::hasData()
-{
-	return mReadPoint!=mWritePoint;
-}
-
-int SDRPacketQueue::getPacketSize()
-{
-	return mSamplesPerPacket;
+    return mSamplesPerPacket;
 }

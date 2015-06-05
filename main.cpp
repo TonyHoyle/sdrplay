@@ -2,13 +2,10 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 
 #include "mySocket.h"
 #include "error.h"
 #include "sdrplay.h"
-
-static const int QUEUE_SIZE = 25;
 
 struct sdr_info
 {
@@ -27,9 +24,10 @@ class sdrServer : socketEvent
 {
 private:
     bool mDebug;
-    pthread_t mThread;
     bool mIpv4, mIpv6;
     int mPort;
+    short *mI, *mQ;
+    uint8_t *mS;
     int mFrequency, mSampleRate;
     int mGain;
     mySocket mSocket;
@@ -39,14 +37,6 @@ private:
 
     void processSdrCommand(sdr_command *sdrcmd);
     double intToDouble(int freq);
-
-    struct sdrData
-    {
-        sdrServer *server;
-        mySocket *socket;
-    };
-    static void *_sdrserver_send(void *data);
-    void sdrserver_send(mySocket *socket);
 
 public:
     sdrServer(int frequency, int port, int samplerate, bool ipv4, bool ipv6, bool debug);
@@ -68,9 +58,9 @@ void usage()
 int main(int argc, char **argv)
 {
     int c;
-    int frequency = 1420000;
+    int frequency = 14200000;
     int port = 1234;
-    int samplerate = 204800;
+    int samplerate = 2048000;
     bool ipv4 = true;
     bool ipv6 = true;
     bool debug = false;
@@ -111,12 +101,15 @@ sdrServer::sdrServer(int frequency, int port, int samplerate, bool ipv4, bool ip
 {
     mFrequency = frequency;
     mSampleRate = samplerate;
-    mGain = 40;
+    mGain = 70;
     mPort = port;
     mIpv4 = ipv4;
     mIpv6 = ipv6;
     mDebug = debug;
     mPartialCommandPtr = mPartialCommand;
+    mI = NULL;
+    mQ = NULL;
+    mS = NULL;
 
     try {
         mSocket.init(this, true);
@@ -129,20 +122,29 @@ sdrServer::sdrServer(int frequency, int port, int samplerate, bool ipv4, bool ip
 
 sdrServer::~sdrServer()
 {
+    delete[] mI;
+    delete[] mQ;
+    delete[] mS;
 }
 
 int sdrServer::run()
 {
     try {
         mSdrPlay.init(mGain, intToDouble(mSampleRate), intToDouble(mFrequency), mir_sdr_BW_1_536, mir_sdr_IF_Zero);
+
         mSdrPlay.setDCMode(dcmOneShot, false);
         mSdrPlay.setDCTrackTime(63);
+
+        mI = new short[mSdrPlay.getSamplesPerPacket()];
+        mQ = new short[mSdrPlay.getSamplesPerPacket()];
+        mS = new uint8_t[mSdrPlay.getSamplesPerPacket() * 2];
 
         if(mDebug)
             printf("SDR server listening on port %d\n", mPort);
 
         mSocket.bind(mPort, mIpv4, mIpv6);
         mSocket.listen();
+
     }
     catch(error *e) {
         fprintf(stderr,"%s\n", e->text());
@@ -157,41 +159,18 @@ bool sdrServer::clientConnected(mySocket *socket)
 
     if(mDebug)
         printf("Connection made from %s\n", socket->endpointAddress());
-    if(socket->send(&info, sizeof(info)) <= 0)
+
+    if(socket->send(&info, sizeof(info)) <= 0) {
+        if(mDebug)
+            printf("Sending initial packet failed\n");
         return false;
+    }
 
-    sdrData *data = new sdrData;
-    data->server = this;
-    data->socket = socket;
-    pthread_create(&mThread, NULL, _sdrserver_send, &data);
-    return true;
+   return true;
 }
 
-void sdrServer::clientDisconnected(mySocket *socket)
+void sdrServer::clientDisconnected(mySocket *)
 {
-    pthread_cancel(mThread);
-}
-
-void *sdrServer::_sdrserver_send(void *data)
-{
-    sdrServer *This = ((sdrData *)data)->server;
-    mySocket *socket = ((sdrData *)data)->socket;
-
-    delete (sdrData *)data;
-    This->sdrserver_send(socket);
-    return NULL;
-}
-
-void sdrServer::sdrserver_send(mySocket *socket)
-{
-    SDRPacketQueue *queue = mSdrPlay.newPacketQueue(QUEUE_SIZE);
-
-    if(mDebug)
-        printf("Packet collection thread started\n");
-    socket->setUserData(queue);
-    while(mSdrPlay.readPacket(queue, NULL, NULL, NULL) == 0)
-        ;
-    delete queue;
 }
 
 void sdrServer::packetReceived(mySocket *socket, const void *packet, ssize_t packetLen, sockaddr *, socklen_t)
@@ -232,12 +211,22 @@ void sdrServer::packetReceived(mySocket *socket, const void *packet, ssize_t pac
 
 bool sdrServer::needPacket(mySocket *socket)
 {
-    SDRPacketQueue *queue = (SDRPacketQueue *)socket->getUserData();
-    short *I, *Q;
+    short *i, *q;
+    uint8_t *s;
+    int count = mSdrPlay.getSamplesPerPacket();
 
-    if(queue->hasData()) {
-        queue->getPacket(false, &I, &Q);
-        socket->send(Q, (size_t) queue->getPacketSize());
+    try {
+        if(mSdrPlay.readPacket(mI, mQ, NULL, NULL, NULL) == 0) {
+            for(i=mI, q=mQ, s=mS; i<mI+count; i++, q++) {
+                *(s++) = (uint8_t)(*i>>8)+128;
+                *(s++) = (uint8_t)(*q>>8)+128;
+            }
+            socket->send(mS, (size_t) count * 2);
+        }
+    }
+    catch(error *e) {
+        printf("%s\n", e->text());
+        return false;
     }
 
     return true;
@@ -251,14 +240,20 @@ void sdrServer::processSdrCommand(sdr_command *sdrcmd)
     switch(cmd)
     {
         case 1: // Set Frequency
-            if(mDebug) printf("Set frequency to %f\n", intToDouble(arg));
+            if(mDebug) printf("Set frequency in Mhz to %f\n", intToDouble(arg));
             mFrequency = arg;
-            mSdrPlay.setRF(intToDouble(arg), false, false);
+            // in Mhz
+            mSdrPlay.uninit();
+            mSdrPlay.init(mGain, intToDouble(mSampleRate), intToDouble(mFrequency), mir_sdr_BW_1_536, mir_sdr_IF_Zero);
+//            mSdrPlay.setRF(intToDouble(arg), false, false);
             break;
         case 2: // Set Sample Rate
-            if(mDebug) printf("Set sample rate to %f\n", intToDouble(arg));
+            if(mDebug) printf("Set sample rate in Hz to %f\n", intToDouble(arg)*1000);
             mSampleRate = arg;
-            mSdrPlay.setFS(intToDouble(arg), false, false, false);
+            // in Hz
+            mSdrPlay.uninit();
+            mSdrPlay.init(mGain, intToDouble(mSampleRate), intToDouble(mFrequency), mir_sdr_BW_1_536, mir_sdr_IF_Zero);
+//            mSdrPlay.setFS(intToDouble(arg)*1000, false, false, false);
             break;
         case 3: // Set Gain Mode
             if(mDebug) printf("Set gain mode to %d\n", arg);
@@ -266,7 +261,7 @@ void sdrServer::processSdrCommand(sdr_command *sdrcmd)
         case 4: // Set Tuner Gain
             if(mDebug) printf("Set tuner gain to %d\n", arg);
             mGain = arg;
-            mSdrPlay.setGR(arg, true, false);
+//            mSdrPlay.setGR(arg, true, false);
             break;
         case 5: // Set Freq Correction
             if(mDebug) printf("Set frequency correction %f\n", intToDouble(arg));
@@ -303,5 +298,5 @@ void sdrServer::processSdrCommand(sdr_command *sdrcmd)
 
 double sdrServer::intToDouble(int freq)
 {
-    return double(freq) / 100000.0;
+    return double(freq) / 1000000.0;
 }
