@@ -20,6 +20,12 @@ struct sdr_command
     int32_t param;
 } __attribute__((packed));
 
+#define RTLSDR_TUNER_R820T 5
+// We don't actually use the R820T gain list.. for a start they go up to 1/10db and we don't support that,
+// but ours go in the other direction too (they're more losses than gains.. the docs really don't explain why).
+const int gain_list[] = { 84, 81, 78, 75, 72, 69, 66, 63, 60, 57, 54, 51, 48, 45, 42, 39, 36, 33, 30, 27, 24, 21, 18, 15, 12, 9,
+                            6, 3, 0 };
+
 class sdrServer : socketEvent
 {
 private:
@@ -28,7 +34,7 @@ private:
     int mPort;
     short *mI, *mQ;
     uint8_t *mS;
-    int mFrequency, mSampleRate;
+    double mFrequency, mSampleRate;
     int mGain;
     mySocket mSocket;
     SDRPlay mSdrPlay;
@@ -99,8 +105,8 @@ int main(int argc, char **argv)
 
 sdrServer::sdrServer(int frequency, int port, int samplerate, bool ipv4, bool ipv6, bool debug)
 {
-    mFrequency = frequency;
-    mSampleRate = samplerate;
+    mFrequency = intToDouble(frequency);
+    mSampleRate = intToDouble(samplerate);
     mGain = 70;
     mPort = port;
     mIpv4 = ipv4;
@@ -130,7 +136,9 @@ sdrServer::~sdrServer()
 int sdrServer::run()
 {
     try {
-        mSdrPlay.init(mGain, intToDouble(mSampleRate), intToDouble(mFrequency), mir_sdr_BW_1_536, mir_sdr_IF_Zero);
+        printf("mSampleRate = %f\n", mSampleRate);
+        printf("mFrequency = %f\n", mFrequency);
+        mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
 
         mSdrPlay.setDCMode(dcmOneShot, false);
         mSdrPlay.setDCTrackTime(63);
@@ -155,7 +163,12 @@ int sdrServer::run()
 
 bool sdrServer::clientConnected(mySocket *socket)
 {
-    sdr_info info = { {'R', 'T', 'L', '\0' }, 0, 64 };
+    /* We pretend to be and R820 as that seems to be the one with the most settings.  The protocol
+     * doesn't allow for arbitrary devices */
+    sdr_info info = { {'R', 'T', 'L', '0' } };
+
+    info.tuner_type = htonl(RTLSDR_TUNER_R820T);
+    info.tuner_gain_count = htonl(sizeof(gain_list)/sizeof(gain_list[0]));
 
     if(mDebug)
         printf("Connection made from %s\n", socket->endpointAddress());
@@ -240,28 +253,28 @@ void sdrServer::processSdrCommand(sdr_command *sdrcmd)
     switch(cmd)
     {
         case 1: // Set Frequency
-            if(mDebug) printf("Set frequency in Mhz to %f\n", intToDouble(arg));
-            mFrequency = arg;
+            mFrequency = intToDouble(arg);
+            if(mDebug) printf("Set frequency in Mhz to %f\n", mFrequency);
             // in Mhz
             mSdrPlay.uninit();
-            mSdrPlay.init(mGain, intToDouble(mSampleRate), intToDouble(mFrequency), mir_sdr_BW_1_536, mir_sdr_IF_Zero);
-//            mSdrPlay.setRF(intToDouble(arg), false, false);
+            mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
+//            mSdrPlay.setRF(mFrequency, false, false);
             break;
         case 2: // Set Sample Rate
-            if(mDebug) printf("Set sample rate in Hz to %f\n", intToDouble(arg)*1000);
-            mSampleRate = arg;
+            mSampleRate = intToDouble(arg);
+            if(mDebug) printf("Set sample rate in Hz to %f\n", mSampleRate);
             // in Hz
-            mSdrPlay.uninit();
-            mSdrPlay.init(mGain, intToDouble(mSampleRate), intToDouble(mFrequency), mir_sdr_BW_1_536, mir_sdr_IF_Zero);
-//            mSdrPlay.setFS(intToDouble(arg)*1000, false, false, false);
+//            mSdrPlay.uninit();
+//            mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
+            mSdrPlay.setFS(mSampleRate, false, false, false);
             break;
         case 3: // Set Gain Mode
             if(mDebug) printf("Set gain mode to %d\n", arg);
             break;
         case 4: // Set Tuner Gain
-            if(mDebug) printf("Set tuner gain to %d\n", arg);
-            mGain = arg;
-//            mSdrPlay.setGR(arg, true, false);
+            mGain = int(arg / 10.0 + 0.5);
+            if(mDebug) printf("Set tuner gain to %d\n", mGain);
+            mSdrPlay.setGR(mGain, true, false);
             break;
         case 5: // Set Freq Correction
             if(mDebug) printf("Set frequency correction %f\n", intToDouble(arg));
@@ -289,6 +302,9 @@ void sdrServer::processSdrCommand(sdr_command *sdrcmd)
             break;
         case 13: // Set gain by index
             if(mDebug) printf("Set gain to index %d\n", arg);
+            mGain = gain_list[arg];
+            if(mDebug) printf("             %d\n", mGain);
+            mSdrPlay.setGR(mGain, true, false);
             break;
         default:
             if(mDebug) printf("Unknown Cmd = %d, arg = %d\n", cmd, arg );
