@@ -33,12 +33,11 @@ mir_sdr_ErrT SDRPlay::readPacket(short *I, short *Q, bool* grChanged, bool* rfCh
 	unsigned firstSampleNum;
     mir_sdr_ErrT res;
 
-    // FIXME: WTF is firstSampleNum?
-
 	res = mir_sdr_ReadPacket(I, Q, &firstSampleNum, &_grChanged, &_rfChanged, &_fsChanged);
     if(grChanged) *grChanged = _grChanged!=0;
     if(rfChanged) *rfChanged = _rfChanged!=0;
     if(fsChanged) *fsChanged = _fsChanged!=0;
+//	mir_sdr_SetSyncUpdateSampleNum(firstSampleNum);
     return res;
 }
  

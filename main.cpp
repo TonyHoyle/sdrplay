@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "mySocket.h"
 #include "error.h"
@@ -45,6 +46,7 @@ private:
 
     void processSdrCommand(sdr_command *sdrcmd);
     double intToDouble(int freq);
+    int classifyFrequency(double frequency);
 
 public:
     sdrServer(int frequency, int port, int samplerate, bool ipv4, bool ipv6, bool debug);
@@ -253,30 +255,49 @@ void sdrServer::processSdrCommand(sdr_command *sdrcmd)
 {
     int cmd = sdrcmd->cmd;
     int arg = htonl(sdrcmd->param);
+    double diff;
+//    int oldFrequencyClass;
+    int newFrequencyClass;
 
     switch(cmd)
     {
         case 1: // Set Frequency
+//            oldFrequencyClass = classifyFrequency(mFrequency);
             mFrequency = intToDouble(arg);
+            newFrequencyClass = classifyFrequency(mFrequency);
             if(mDebug) printf("Set frequency in Mhz to %f\n", mFrequency);
+            if(newFrequencyClass == -1) {
+                if(mDebug) printf("Out of spec");
+                break;
+            }
+            if(mDebug) printf("New frequency class is %d\n", newFrequencyClass);
             // in Mhz
-            mSdrPlay.uninit();
-            mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
-//            mSdrPlay.setRF(mFrequency, false, false);
+            /* setRf always returns mir_sdr_SetRf: detected INT out of range - returning without programming tuner */
+            /* No idea what this means... */
+            if(true/*oldFrequencyClass!=newFrequencyClass*/) {
+                mSdrPlay.uninit();
+                mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
+            } /*else {
+                mSdrPlay.setRF(mFrequency, true, false);
+            }*/
             break;
         case 2: // Set Sample Rate
+            diff = fabs(mSampleRate - intToDouble(arg));
             mSampleRate = intToDouble(arg);
             if(mDebug) printf("Set sample rate in Hz to %f\n", mSampleRate);
             // in Hz
-//            mSdrPlay.uninit();
-//            mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
-            mSdrPlay.setFS(mSampleRate, false, false, false);
+            // From the docs, changes over >1000 need a reinit (so we use +/-500).
+            if(diff > 500) {
+                mSdrPlay.uninit();
+                mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
+            } else
+                mSdrPlay.setFS(mSampleRate, true, false, false);
             break;
         case 3: // Set Gain Mode
             if(mDebug) printf("Set gain mode to %d\n", arg);
             break;
         case 4: // Set Tuner Gain
-            mGain = int(arg / 10.0 + 0.5);
+            mGain = arg;
             if(mDebug) printf("Set tuner gain to %d\n", mGain);
             mSdrPlay.setGR(mGain, true, false);
             break;
@@ -320,4 +341,23 @@ void sdrServer::processSdrCommand(sdr_command *sdrcmd)
 double sdrServer::intToDouble(int freq)
 {
     return double(freq) / 1000000.0;
+}
+
+int sdrServer::classifyFrequency(double frequency)
+{
+    if(frequency < 0.1 || frequency > 2000)
+        return -1; // Out of spec
+    if(frequency < 60)
+        return 1; // 100Khz - 60Mhz
+    if(frequency < 120)
+        return 2; // 60Mhz - 120Mhz
+    if(frequency < 245)
+        return 3; // 120Mhz - 245Mhz
+    if(frequency < 380)
+        return 4; // 245Mhz - 380Mhz
+    if(frequency < 430)
+        return -1; // 380Mhz - 430Mhz unsupported
+    if(frequency < 1000)
+        return 5; // 430Mhz - 1Ghz
+    return 6; // 1Ghz - 2Ghz;
 }
