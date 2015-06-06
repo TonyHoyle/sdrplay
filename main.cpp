@@ -7,6 +7,8 @@
 #include "error.h"
 #include "sdrplay.h"
 
+#define SERVER_VERSION "1.0.0"
+
 struct sdr_info
 {
     char magic[4];
@@ -58,7 +60,8 @@ public:
 
 void usage()
 {
-    printf("usage: sdr_tcp [-f frequency][-p port][-s samplerate][-4][-6][-d]\n");
+    printf("SRPplay rtl_tcp server version "SERVER_VERSION"\n");
+    printf("usage: sdr_tcp [-f frequency][-p port][-s samplerate][-4][-6][-d][-v]\n");
 }
 
 int main(int argc, char **argv)
@@ -71,7 +74,7 @@ int main(int argc, char **argv)
     bool ipv6 = true;
     bool debug = false;
 
-    while((c = getopt(argc, argv, "f:p:s:46d")) > 0)
+    while((c = getopt(argc, argv, "f:p:s:46dv")) > 0)
         switch(c)
         {
             case 'f':
@@ -92,6 +95,9 @@ int main(int argc, char **argv)
             case 'd':
                 debug = true;
                 break;
+	    case 'v':
+    		printf("SRPplay rtl_tcp server version "SERVER_VERSION"\n");
+		return 0;
             default:
                 usage();
                 return -1;
@@ -302,6 +308,7 @@ void sdrServer::processSdrCommand(sdr_command *sdrcmd)
             break;
         case 13: // Set gain by index
             if(mDebug) printf("Set gain to index %d\n", arg);
+	    if(arg<0 || arg>(int)(sizeof(gain_list)/sizeof(gain_list[0]))) break;
             mGain = gain_list[arg];
             if(mDebug) printf("             %d\n", mGain);
             mSdrPlay.setGR(mGain, true, false);

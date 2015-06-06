@@ -3,7 +3,7 @@ project(sdr)
 
 find_library(MIR_LIBRARY NAMES mir_sdr mirsdrapi-rsp)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -g")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O2")
 
 set(SOURCE_FILES main.cpp sdrplay.cpp mySocket.cpp error.cpp)
 set(HEADER_FILES sdrplay.h mySocket.h error.h)
