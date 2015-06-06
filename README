@@ -9,6 +9,10 @@ NOTES:
 
   The server pretends to be an R820T - this enables gain setting but the values the R820T use don't really map to the SDRPlay, so there won't be the same results.
 
+HISTORY:
+  Version 0.0.0: Initial build
+  Version 1.0.0: Gain settings should now work in client apps.
+
 TODO:
   AGC is not currently supported, due to lack of documentation.
 
