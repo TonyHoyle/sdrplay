@@ -142,8 +142,6 @@ sdrServer::~sdrServer()
 int sdrServer::run()
 {
     try {
-        printf("mSampleRate = %f\n", mSampleRate);
-        printf("mFrequency = %f\n", mFrequency);
         mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
 
         mSdrPlay.setDCMode(dcmOneShot, false);
