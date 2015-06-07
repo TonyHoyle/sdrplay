@@ -17,8 +17,8 @@
 ```
 
 ## HISTORY
-  Version 0.0.0: Initial build
-  Version 1.0.0: Gain settings should now work in client apps.
+- Version 0.0.0: Initial build
+- Version 1.0.0: Gain settings should now work in client apps.
 
 ## TODO
   AGC is not currently supported, due to lack of documentation.
