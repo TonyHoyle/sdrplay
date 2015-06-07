@@ -62,8 +62,8 @@ public:
 
 void usage()
 {
-    printf("SRPplay rtl_tcp server version "SERVER_VERSION"\n");
-    printf("usage: sdr_tcp [-f frequency][-p port][-s samplerate][-4][-6][-d][-v]\n");
+    printf("SDRPlay tcp server version "SERVER_VERSION"\n");
+    printf("usage: sdrplay [-f frequency][-p port][-s samplerate][-4][-6][-d][-v]\n");
 }
 
 int main(int argc, char **argv)
@@ -98,7 +98,7 @@ int main(int argc, char **argv)
                 debug = true;
                 break;
 	    case 'v':
-    		printf("SRPplay rtl_tcp server version "SERVER_VERSION"\n");
+    		printf("SRPplay tcp server version "SERVER_VERSION"\n");
 		return 0;
             default:
                 usage();
