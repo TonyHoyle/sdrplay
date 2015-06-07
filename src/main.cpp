@@ -8,7 +8,7 @@
 #include "error.h"
 #include "sdrplay.h"
 
-#define SERVER_VERSION "1.0.0"
+#define SERVER_VERSION "1.0.1"
 
 struct sdr_info
 {

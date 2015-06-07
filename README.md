@@ -2,10 +2,10 @@
 
 (C)2015 Tony Hoyle (tony@hoyle.me.uk).  Licensed under the BSD license. 
 
-## NOTES
-  The SDRPlay libraries are compiled against a recent libusb - at least 1.0.18.  The one that ships with the Raspberry Pi is not new enough and will crash.  Suitable upgrades are at https://www.hoyle.me.uk/pi/ 
-
-  The server pretends to be an R820T - this enables gain setting but the values the R820T use don't really map to the SDRPlay, so there won't be the same results.
+## HISTORY
+- Version 0.0.0: Initial build
+- Version 1.0.0: Gain settings should now work in client apps.
+- Version 1.0.1: Tidy up project, give better binary name
 
 ## BUILDING
 ```
@@ -15,9 +15,10 @@
   make
 ```
 
-## HISTORY
-- Version 0.0.0: Initial build
-- Version 1.0.0: Gain settings should now work in client apps.
+## NOTES
+  The SDRPlay libraries are compiled against a recent libusb - at least 1.0.18.  The one that ships with the Raspberry Pi is not new enough and will crash.  Suitable upgrades are at https://www.hoyle.me.uk/pi/ 
+
+  The server pretends to be an R820T - this enables gain setting but the values the R820T use don't really map to the SDRPlay, so there won't be the same results.
 
 ## TODO
   AGC is not currently supported, due to lack of documentation.
