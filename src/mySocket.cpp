@@ -323,7 +323,7 @@ bool mySocket::read(int socket)
 
     if(mTcp) {
         ssize_t bytes = ::recv(socket, recvBuf, sizeof(recvBuf), 0);
-        if((int)bytes < 0)
+        if((int)bytes <= 0)
             return false;
 
         recvBuf[bytes] = 0;
@@ -332,7 +332,7 @@ bool mySocket::read(int socket)
     } else {
         sl = sizeof(recvSock);
         ssize_t bytes = ::recvfrom(socket, recvBuf, sizeof(recvBuf), 0, (sockaddr*)&recvSock, &sl);
-        if((int)bytes < 0)
+        if((int)bytes <= 0)
             return false;
 
         recvBuf[bytes] = 0;

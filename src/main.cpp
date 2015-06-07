@@ -39,6 +39,10 @@ private:
     uint8_t *mS;
     double mFrequency, mSampleRate;
     int mGain;
+    double mOldFrequency, mOldSampleRate;
+    int mOldGain;
+    bool mFrequencyChanged, mSamplerateChanged, mGainChanged;
+    bool mAgc;
     mySocket mSocket;
     SDRPlay mSdrPlay;
     uint8_t mPartialCommand[sizeof(sdr_command)];
@@ -48,6 +52,10 @@ private:
     double intToDouble(int freq);
     int classifyFrequency(double frequency);
 
+    void updateFrequency();
+    void updateSampleRate();
+    void updateGain();
+    void reinit();
 public:
     sdrServer(int frequency, int port, int samplerate, bool ipv4, bool ipv6, bool debug);
     virtual ~sdrServer();
@@ -63,7 +71,7 @@ public:
 void usage()
 {
     printf("SDRPlay tcp server version "SERVER_VERSION"\n");
-    printf("usage: sdrplay [-f frequency][-p port][-s samplerate][-4][-6][-d][-v]\n");
+    printf("usage: sdrplay [-f frequency][-p port][-s samplerate][-4][-6][-d][-v][-g]\n");
 }
 
 int main(int argc, char **argv)
@@ -75,8 +83,9 @@ int main(int argc, char **argv)
     bool ipv4 = true;
     bool ipv6 = true;
     bool debug = false;
+    bool foreground = false;
 
-    while((c = getopt(argc, argv, "f:p:s:46dv")) > 0)
+    while((c = getopt(argc, argv, "f:p:s:46dvg")) > 0)
         switch(c)
         {
             case 'f':
@@ -96,6 +105,10 @@ int main(int argc, char **argv)
                 break;
             case 'd':
                 debug = true;
+                foreground = true;
+                break;
+            case 'g':
+                foreground = true;
                 break;
 	    case 'v':
     		printf("SRPplay tcp server version "SERVER_VERSION"\n");
@@ -105,8 +118,14 @@ int main(int argc, char **argv)
                 return -1;
         }
 
+    if(!foreground)
+        daemon(0,0);
+
     sdrServer server(frequency, port, samplerate, ipv4, ipv6, debug);
-    return server.run();
+    for(;;) {
+        server.run();
+        sleep(1000);
+    }
 }
 
 /* sdrServer */
@@ -199,6 +218,7 @@ void sdrServer::packetReceived(mySocket *socket, const void *packet, ssize_t pac
     if(mDebug)
         printf("Received %d byte packet from %s\n", (int)packetLen, socket->endpointAddress());
 
+
     if(mPartialCommandPtr > mPartialCommand) {
         ssize_t l = mPartialCommandPtr - mPartialCommand;
         ssize_t r = sizeof(sdr_command) - l;
@@ -233,12 +253,17 @@ bool sdrServer::needPacket(mySocket *socket)
     short *i, *q;
     uint8_t *s;
     int count = mSdrPlay.getSamplesPerPacket();
+    bool grChanged, rfChanged, fsChanged;
 
     try {
-        if(mSdrPlay.readPacket(mI, mQ, NULL, NULL, NULL) == 0) {
+        if(mGainChanged) updateGain();
+        if(mSamplerateChanged) updateSampleRate();
+        if(mFrequencyChanged) updateFrequency();
+
+        if(mSdrPlay.readPacket(mI, mQ, &grChanged, &rfChanged, &fsChanged) == 0) {
             for(i=mI, q=mQ, s=mS; i<mI+count; i++, q++) {
-                *(s++) = (uint8_t)(*i>>8)+128;
-                *(s++) = (uint8_t)(*q>>8)+128;
+                *(s++) = (uint8_t)((*i>>8)+128);
+                *(s++) = (uint8_t)((*q>>8)+128);
             }
             socket->send(mS, (size_t) count * 2);
         }
@@ -255,51 +280,29 @@ void sdrServer::processSdrCommand(sdr_command *sdrcmd)
 {
     int cmd = sdrcmd->cmd;
     int arg = htonl(sdrcmd->param);
-    double diff;
-//    int oldFrequencyClass;
-    int newFrequencyClass;
 
     switch(cmd)
     {
         case 1: // Set Frequency
-//            oldFrequencyClass = classifyFrequency(mFrequency);
+            mOldFrequency = mFrequency;
             mFrequency = intToDouble(arg);
-            newFrequencyClass = classifyFrequency(mFrequency);
             if(mDebug) printf("Set frequency in Mhz to %f\n", mFrequency);
-            if(newFrequencyClass == -1) {
-                if(mDebug) printf("Out of spec");
-                break;
-            }
-            if(mDebug) printf("New frequency class is %d\n", newFrequencyClass);
-            // in Mhz
-            /* setRf always returns mir_sdr_SetRf: detected INT out of range - returning without programming tuner */
-            /* No idea what this means... */
-            if(true/*oldFrequencyClass!=newFrequencyClass*/) {
-                mSdrPlay.uninit();
-                mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
-            } /*else {
-                mSdrPlay.setRF(mFrequency, true, false);
-            }*/
+            mFrequencyChanged = true;
             break;
         case 2: // Set Sample Rate
-            diff = fabs(mSampleRate - intToDouble(arg));
+            mOldSampleRate = mSampleRate;
             mSampleRate = intToDouble(arg);
             if(mDebug) printf("Set sample rate in Hz to %f\n", mSampleRate);
-            // in Hz
-            // From the docs, changes over >1000 need a reinit (so we use +/-500).
-            if(diff > 500) {
-                mSdrPlay.uninit();
-                mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
-            } else
-                mSdrPlay.setFS(mSampleRate, true, false, false);
+            mSamplerateChanged = true;
             break;
         case 3: // Set Gain Mode
             if(mDebug) printf("Set gain mode to %d\n", arg);
             break;
         case 4: // Set Tuner Gain
+            mOldGain = mGain;
             mGain = arg;
             if(mDebug) printf("Set tuner gain to %d\n", mGain);
-            mSdrPlay.setGR(mGain, true, false);
+            mGainChanged = true;
             break;
         case 5: // Set Freq Correction
             if(mDebug) printf("Set frequency correction %f\n", intToDouble(arg));
@@ -312,6 +315,7 @@ void sdrServer::processSdrCommand(sdr_command *sdrcmd)
             break;
         case 8: // Set AGC mode
             if(mDebug) printf("Set agc mode to %d\n", arg);
+            mAgc = arg != 0;
             break;
         case 9: // Set direct sampling // Sample directly off IF or tuner
             if(mDebug) printf("Set direct sampling to %d\n", arg);
@@ -327,10 +331,11 @@ void sdrServer::processSdrCommand(sdr_command *sdrcmd)
             break;
         case 13: // Set gain by index
             if(mDebug) printf("Set gain to index %d\n", arg);
-	    if(arg<0 || arg>(int)(sizeof(gain_list)/sizeof(gain_list[0]))) break;
+	        if(arg<0 || arg>(int)(sizeof(gain_list)/sizeof(gain_list[0])))
+                break;
             mGain = gain_list[arg];
             if(mDebug) printf("             %d\n", mGain);
-            mSdrPlay.setGR(mGain, true, false);
+            mGainChanged = true;
             break;
         default:
             if(mDebug) printf("Unknown Cmd = %d, arg = %d\n", cmd, arg );
@@ -360,4 +365,59 @@ int sdrServer::classifyFrequency(double frequency)
     if(frequency < 1000)
         return 5; // 430Mhz - 1Ghz
     return 6; // 1Ghz - 2Ghz;
+}
+
+void sdrServer::updateFrequency()
+{
+    int /*oldFrequencyClass,*/ newFrequencyClass;
+
+    //oldFrequencyClass = classifyFrequency(mOldFrequency);
+    newFrequencyClass = classifyFrequency(mFrequency);
+    if(newFrequencyClass == -1) {
+        if(mDebug) printf("Out of spec");
+        return;
+    }
+    if(mDebug) printf("New frequency class is %d\n", newFrequencyClass);
+
+    #if 0
+    /* setRf always returns mir_sdr_SetRf: detected INT out of range - returning without programming tuner */
+    /* No idea what this means... */
+    if(oldFrequencyClass!=newFrequencyClass) {
+        reinit();
+    } else {
+        mFrequencyChanged = false;
+        mSdrPlay.setRF(mFrequency, true, false);
+    }
+    #else
+    reinit();
+    #endif
+}
+
+void sdrServer::updateSampleRate()
+{
+    double diff;
+
+    diff = fabs(mSampleRate - mOldSampleRate);
+    // in Hz
+    // From the docs, changes over >1000 need a reinit (so we use +/-500).
+    if(diff > 500) {
+        reinit();
+    } else
+        mSamplerateChanged = false;
+        mSdrPlay.setFS(mSampleRate, true, false, false);
+}
+
+void sdrServer::updateGain()
+{
+    mGainChanged = false;
+    mSdrPlay.setGR(mGain, true, false);
+}
+
+void sdrServer::reinit()
+{
+    mFrequencyChanged = false;
+    mSamplerateChanged = false;
+    mGainChanged = false;
+    mSdrPlay.uninit();
+    mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
 }
