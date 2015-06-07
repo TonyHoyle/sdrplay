@@ -1,0 +1,14 @@
+Source: sdrplay-tcp
+Section: unknown
+Priority: extra
+Maintainer: Tony Hoyle <tony@hoyle.me.uk>
+Build-Depends: debhelper (>= 8.0.0), cmake
+Standards-Version: 3.9.3
+Vcs-Git: https://github.com/TonyHoyle/sdrplay.git
+Vcs-Browser: https://github.com/TonyHoyle/sdrplay
+
+Package: sdrplay-tcp
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends} libusb-1.0.0 (>= 1.0.18)
+Description: rtl-tcp compatible server for SDRPlay 
+

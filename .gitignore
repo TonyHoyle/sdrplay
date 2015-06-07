@@ -1,4 +1,5 @@
 build/
 .idea/workspace.xml
 .idea/tasks.xml
+obj-arm-linux-gnueabihf/
 
