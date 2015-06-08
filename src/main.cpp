@@ -35,6 +35,7 @@ private:
     bool mDebug;
     bool mIpv4, mIpv6;
     int mPort;
+    mir_sdr_Bw_MHzT mBandwidth;
     short *mI, *mQ;
     uint8_t *mS;
     double mFrequency, mSampleRate;
@@ -143,6 +144,7 @@ sdrServer::sdrServer(int frequency, int port, int samplerate, bool ipv4, bool ip
     mI = NULL;
     mQ = NULL;
     mS = NULL;
+    mBandwidth = mir_sdr_BW_1_536;
 
     try {
         mSocket.init(this, true);
@@ -163,7 +165,7 @@ sdrServer::~sdrServer()
 int sdrServer::run()
 {
     try {
-        mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
+        mSdrPlay.init(mGain, mSampleRate, mFrequency, mBandwidth, mir_sdr_IF_Zero);
 
         mSdrPlay.setDCMode(dcmOneShot, false);
         mSdrPlay.setDCTrackTime(63);
@@ -207,8 +209,10 @@ bool sdrServer::clientConnected(mySocket *socket)
    return true;
 }
 
-void sdrServer::clientDisconnected(mySocket *)
+void sdrServer::clientDisconnected(mySocket *socket)
 {
+    if(mDebug)
+        printf("Connection lost from %s\n", socket->endpointAddress());
 }
 
 void sdrServer::packetReceived(mySocket *socket, const void *packet, ssize_t packetLen, sockaddr *, socklen_t)
@@ -369,9 +373,9 @@ int sdrServer::classifyFrequency(double frequency)
 
 void sdrServer::updateFrequency()
 {
-    int /*oldFrequencyClass,*/ newFrequencyClass;
+    int oldFrequencyClass, newFrequencyClass;
 
-    //oldFrequencyClass = classifyFrequency(mOldFrequency);
+    oldFrequencyClass = classifyFrequency(mOldFrequency);
     newFrequencyClass = classifyFrequency(mFrequency);
     if(newFrequencyClass == -1) {
         if(mDebug) printf("Out of spec");
@@ -379,32 +383,43 @@ void sdrServer::updateFrequency()
     }
     if(mDebug) printf("New frequency class is %d\n", newFrequencyClass);
 
-    #if 0
-    /* setRf always returns mir_sdr_SetRf: detected INT out of range - returning without programming tuner */
-    /* No idea what this means... */
     if(oldFrequencyClass!=newFrequencyClass) {
         reinit();
     } else {
         mFrequencyChanged = false;
-        mSdrPlay.setRF(mFrequency, true, false);
+        mSdrPlay.setRF((mFrequency - mOldFrequency) * 1000, false, false);
+//        mSdrPlay.setRF(mFrequency * 1000, true, false);
     }
-    #else
-    reinit();
-    #endif
 }
 
 void sdrServer::updateSampleRate()
 {
     double diff;
 
-    diff = fabs(mSampleRate - mOldSampleRate);
-    // in Hz
-    // From the docs, changes over >1000 need a reinit (so we use +/-500).
-    if(diff > 500) {
-        reinit();
-    } else
-        mSamplerateChanged = false;
-        mSdrPlay.setFS(mSampleRate, true, false, false);
+    if(mSampleRate < (((int)mBandwidth)/1000.0))  {
+      if(mSampleRate >= 1.536) mBandwidth = mir_sdr_BW_1_536;
+      else if(mSampleRate >= 0.6) mBandwidth = mir_sdr_BW_0_600;
+      else if(mSampleRate >= 0.3) mBandwidth = mir_sdr_BW_0_300;
+      else if(mSampleRate >= 0.2) mBandwidth = mir_sdr_BW_0_200;
+      else {
+          if(mDebug) printf("Sample rate below 200 not supported\n");
+          mBandwidth = mir_sdr_BW_1_536;
+          mSampleRate = 2.048;
+      }
+      reinit();
+    } else if(mSampleRate > 1.536 && (int)mBandwidth < 1536) {
+      mBandwidth = mir_sdr_BW_1_536;
+      reinit();
+    } else {
+        diff = fabs(mSampleRate - mOldSampleRate);
+        // in Hz
+        // From the docs, changes over >1000 need a reinit (so we use +/-500).
+        if(diff > 500) {
+            reinit();
+        } else
+            mSamplerateChanged = false;
+            mSdrPlay.setFS(mSampleRate, true, false, false);
+    }
 }
 
 void sdrServer::updateGain()
@@ -419,5 +434,5 @@ void sdrServer::reinit()
     mSamplerateChanged = false;
     mGainChanged = false;
     mSdrPlay.uninit();
-    mSdrPlay.init(mGain, mSampleRate, mFrequency, mir_sdr_BW_1_536, mir_sdr_IF_Zero);
+    mSdrPlay.init(mGain, mSampleRate, mFrequency, mBandwidth, mir_sdr_IF_Zero);
 }
