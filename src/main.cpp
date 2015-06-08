@@ -57,6 +57,7 @@ private:
     void updateSampleRate();
     void updateGain();
     void reinit();
+    void init();
 public:
     sdrServer(int frequency, int port, int samplerate, bool ipv4, bool ipv6, bool debug);
     virtual ~sdrServer();
@@ -165,14 +166,8 @@ sdrServer::~sdrServer()
 int sdrServer::run()
 {
     try {
-        mSdrPlay.init(mGain, mSampleRate, mFrequency, mBandwidth, mir_sdr_IF_Zero);
-
         mSdrPlay.setDCMode(dcmOneShot, false);
         mSdrPlay.setDCTrackTime(63);
-
-        mI = new short[mSdrPlay.getSamplesPerPacket()];
-        mQ = new short[mSdrPlay.getSamplesPerPacket()];
-        mS = new uint8_t[mSdrPlay.getSamplesPerPacket() * 2];
 
         if(mDebug)
             printf("SDR server listening on port %d\n", mPort);
@@ -206,6 +201,8 @@ bool sdrServer::clientConnected(mySocket *socket)
         return false;
     }
 
+    init();
+
    return true;
 }
 
@@ -213,6 +210,8 @@ void sdrServer::clientDisconnected(mySocket *socket)
 {
     if(mDebug)
         printf("Connection lost from %s\n", socket->endpointAddress());
+
+    mSdrPlay.uninit();
 }
 
 void sdrServer::packetReceived(mySocket *socket, const void *packet, ssize_t packetLen, sockaddr *, socklen_t)
@@ -260,9 +259,9 @@ bool sdrServer::needPacket(mySocket *socket)
     bool grChanged, rfChanged, fsChanged;
 
     try {
-        if(mGainChanged) updateGain();
-        if(mSamplerateChanged) updateSampleRate();
         if(mFrequencyChanged) updateFrequency();
+        if(mSamplerateChanged) updateSampleRate();
+        if(mGainChanged) updateGain();
 
         if(mSdrPlay.readPacket(mI, mQ, &grChanged, &rfChanged, &fsChanged) == 0) {
             for(i=mI, q=mQ, s=mS; i<mI+count; i++, q++) {
@@ -387,8 +386,7 @@ void sdrServer::updateFrequency()
         reinit();
     } else {
         mFrequencyChanged = false;
-        mSdrPlay.setRF((mFrequency - mOldFrequency) * 1000, false, false);
-//        mSdrPlay.setRF(mFrequency * 1000, true, false);
+        mSdrPlay.setRF(mFrequency * 1000000, true, false);
     }
 }
 
@@ -418,7 +416,9 @@ void sdrServer::updateSampleRate()
             reinit();
         } else
             mSamplerateChanged = false;
-            mSdrPlay.setFS(mSampleRate, true, false, false);
+	    /* SetFS occasionally fails anyway.. */
+            if(mSdrPlay.setFS(mSampleRate, true, false, false))
+	      reinit();
     }
 }
 
@@ -430,9 +430,23 @@ void sdrServer::updateGain()
 
 void sdrServer::reinit()
 {
+   mSdrPlay.uninit();
+   init();
+}
+
+void sdrServer::init()
+{
     mFrequencyChanged = false;
     mSamplerateChanged = false;
     mGainChanged = false;
-    mSdrPlay.uninit();
+
     mSdrPlay.init(mGain, mSampleRate, mFrequency, mBandwidth, mir_sdr_IF_Zero);
+
+    delete[] mI;
+    delete[] mQ;
+    delete[] mS;
+    mI = new short[mSdrPlay.getSamplesPerPacket()];
+    mQ = new short[mSdrPlay.getSamplesPerPacket()];
+    mS = new uint8_t[mSdrPlay.getSamplesPerPacket() * 2];
+
 }
