@@ -6,6 +6,7 @@
 - Version 0.0.0: Initial build
 - Version 1.0.0: Gain settings should now work in client apps.
 - Version 1.0.1: Tidy up project, give better binary name.  Run in background by default.
+- Version 1.0.2: When no clients collected, don't initialise the device as it uses CPU when idle.
 
 ## BUILDING
 ```
@@ -35,8 +36,5 @@
   AGC is not currently supported, due to lack of documentation.
 
 ## BUGS
-  The only way to change frequency seems to be to reinit the entire SDRPlay - setRf doesn't work.. this
-  makes tuning slow.
-
   Every now and then the SDRPlay goes loopy in SDR#.  Disconnect and reconnect to fix this.. no idea why this happens.
 
