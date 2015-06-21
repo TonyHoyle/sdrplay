@@ -136,7 +136,7 @@ sdrServer::sdrServer(int frequency, int port, int samplerate, bool ipv4, bool ip
 {
     mFrequency = intToDouble(frequency);
     mSampleRate = intToDouble(samplerate);
-    mGain = 70;
+    mGain = gain_list[8];
     mPort = port;
     mIpv4 = ipv4;
     mIpv6 = ipv6;
