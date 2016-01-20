@@ -120,6 +120,7 @@ int main(int argc, char **argv)
                 return -1;
         }
 
+    setbuf(stdout, NULL);
     if(!foreground)
         daemon(0,0);
 
